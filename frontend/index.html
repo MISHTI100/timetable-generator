@@ -10,6 +10,7 @@
     --rule:#d8d2c2;
     --accent:#3a6b5c;
     --accent-2:#b5502e;
+    --danger:#a3372a;
     --slot-bg:#ffffff;
     font-family: "Iowan Old Style","Georgia",serif;
   }
@@ -97,7 +98,16 @@
     list-style:none; margin:8px 0 0; padding:0;
     font-size:13px; color:#3a4250;
   }
-  ul.list li{ padding:3px 0; border-bottom:1px dashed var(--rule); }
+  ul.list li{
+    padding:5px 0; border-bottom:1px dashed var(--rule);
+    display:flex; justify-content:space-between; align-items:center; gap:8px;
+  }
+  .del-btn{
+    width:auto; margin:0; padding:2px 8px; background:transparent; color:var(--danger);
+    border:1px solid var(--danger); font-size:11px; border-radius:3px; text-transform:none;
+    letter-spacing:0; font-family:"Courier New",monospace;
+  }
+  .del-btn:hover{ background:var(--danger); color:#fff; }
 
   table{
     width:100%;
@@ -209,7 +219,7 @@
 
 <script>
 // ---- CHANGE THIS if your backend runs on a different port ----
-const API = "https://timetable-generator-c0fi.onrender.com";
+const API = "http://localhost:8000";
 
 let teachers = [], rooms = [], sections = [], subjects = [];
 let lastTimetable = [];
@@ -224,19 +234,29 @@ async function refreshAll(){
 }
 
 function renderLists(){
-  document.getElementById("teacherList").innerHTML =
-    teachers.map(t => `<li>${t.name}</li>`).join("");
-  document.getElementById("roomList").innerHTML =
-    rooms.map(r => `<li>${r.name}</li>`).join("");
-  document.getElementById("sectionList").innerHTML =
-    sections.map(s => `<li>${s.name}</li>`).join("");
-  document.getElementById("subjectList").innerHTML =
-    subjects.map(s => `<li>${s.name} — ${s.periods_per_week}/wk</li>`).join("");
+  document.getElementById("teacherList").innerHTML = teachers.map(t =>
+    `<li><span>${t.name}</span><button class="del-btn" onclick="removeItem('teachers', ${t.id})">Remove</button></li>`
+  ).join("");
+  document.getElementById("roomList").innerHTML = rooms.map(r =>
+    `<li><span>${r.name}</span><button class="del-btn" onclick="removeItem('rooms', ${r.id})">Remove</button></li>`
+  ).join("");
+  document.getElementById("sectionList").innerHTML = sections.map(s =>
+    `<li><span>${s.name}</span><button class="del-btn" onclick="removeItem('sections', ${s.id})">Remove</button></li>`
+  ).join("");
+  document.getElementById("subjectList").innerHTML = subjects.map(s =>
+    `<li><span>${s.name} — ${s.periods_per_week}/wk</span><button class="del-btn" onclick="removeItem('subjects', ${s.id})">Remove</button></li>`
+  ).join("");
 
   const tSel = document.getElementById("subjectTeacher");
   tSel.innerHTML = teachers.map(t => `<option value="${t.id}">${t.name}</option>`).join("");
   const sSel = document.getElementById("subjectSection");
   sSel.innerHTML = sections.map(s => `<option value="${s.id}">${s.name}</option>`).join("");
+}
+
+async function removeItem(kind, id){
+  if(!confirm("Remove this? Any related subjects may also be removed.")) return;
+  await fetch(`${API}/${kind}/${id}`, {method:"DELETE"});
+  refreshAll();
 }
 
 function showMessage(text, type){

@@ -25,7 +25,7 @@ class Teacher(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
 
-    subjects = relationship("Subject", back_populates="teacher")
+    subjects = relationship("Subject", back_populates="teacher", cascade="all, delete-orphan")
 
 
 class Room(Base):
@@ -42,7 +42,7 @@ class Section(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
 
-    subjects = relationship("Subject", back_populates="section")
+    subjects = relationship("Subject", back_populates="section", cascade="all, delete-orphan")
 
 
 class Subject(Base):

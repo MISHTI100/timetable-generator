@@ -1,32 +1,24 @@
 """
 main.py
 -------
-This is the web server (API). It uses FastAPI, a modern Python framework.
-
-WHAT'S AN API?
-An API lets the frontend (the webpage the user sees) talk to the backend
-(this Python code) over HTTP. The frontend sends requests like
-"add a teacher" or "generate the timetable", and this file handles them.
-
-HOW TO RUN THIS FILE: see README.md in the project root.
+The API server. Simple single shared pool (no college separation) with
+add + delete endpoints for teachers, rooms, sections, and subjects, so
+you can fix mistakes without wiping the whole database.
 """
 
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
 from pydantic import BaseModel
-from typing import List
 
 from database import engine, get_db
 import models
 from scheduler import generate_timetable
 
-# Create all database tables (if they don't already exist)
 models.Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="College Timetable Generator")
 
-# CORS lets our frontend (running on a different port/file) call this API.
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -35,19 +27,16 @@ app.add_middleware(
 )
 
 
-# ---------- Pydantic schemas (define what valid JSON input looks like) ----------
+# ---------------------------- Pydantic schemas ----------------------------
 
 class TeacherIn(BaseModel):
     name: str
 
-
 class RoomIn(BaseModel):
     name: str
 
-
 class SectionIn(BaseModel):
     name: str
-
 
 class SubjectIn(BaseModel):
     name: str
@@ -66,10 +55,19 @@ def add_teacher(teacher: TeacherIn, db: Session = Depends(get_db)):
     db.refresh(obj)
     return obj
 
-
 @app.get("/teachers")
 def list_teachers(db: Session = Depends(get_db)):
     return db.query(models.Teacher).all()
+
+@app.delete("/teachers/{teacher_id}")
+def delete_teacher(teacher_id: int, db: Session = Depends(get_db)):
+    obj = db.query(models.Teacher).get(teacher_id)
+    if not obj:
+        raise HTTPException(404, "Teacher not found")
+    db.query(models.Subject).filter_by(teacher_id=teacher_id).delete()
+    db.delete(obj)
+    db.commit()
+    return {"status": "deleted"}
 
 
 # ------------------------------ Room endpoints ------------------------------
@@ -82,10 +80,18 @@ def add_room(room: RoomIn, db: Session = Depends(get_db)):
     db.refresh(obj)
     return obj
 
-
 @app.get("/rooms")
 def list_rooms(db: Session = Depends(get_db)):
     return db.query(models.Room).all()
+
+@app.delete("/rooms/{room_id}")
+def delete_room(room_id: int, db: Session = Depends(get_db)):
+    obj = db.query(models.Room).get(room_id)
+    if not obj:
+        raise HTTPException(404, "Room not found")
+    db.delete(obj)
+    db.commit()
+    return {"status": "deleted"}
 
 
 # ---------------------------- Section endpoints ----------------------------
@@ -98,10 +104,19 @@ def add_section(section: SectionIn, db: Session = Depends(get_db)):
     db.refresh(obj)
     return obj
 
-
 @app.get("/sections")
 def list_sections(db: Session = Depends(get_db)):
     return db.query(models.Section).all()
+
+@app.delete("/sections/{section_id}")
+def delete_section(section_id: int, db: Session = Depends(get_db)):
+    obj = db.query(models.Section).get(section_id)
+    if not obj:
+        raise HTTPException(404, "Section not found")
+    db.query(models.Subject).filter_by(section_id=section_id).delete()
+    db.delete(obj)
+    db.commit()
+    return {"status": "deleted"}
 
 
 # ---------------------------- Subject endpoints ----------------------------
@@ -124,20 +139,24 @@ def add_subject(subject: SubjectIn, db: Session = Depends(get_db)):
     db.refresh(obj)
     return obj
 
-
 @app.get("/subjects")
 def list_subjects(db: Session = Depends(get_db)):
     return db.query(models.Subject).all()
+
+@app.delete("/subjects/{subject_id}")
+def delete_subject(subject_id: int, db: Session = Depends(get_db)):
+    obj = db.query(models.Subject).get(subject_id)
+    if not obj:
+        raise HTTPException(404, "Subject not found")
+    db.delete(obj)
+    db.commit()
+    return {"status": "deleted"}
 
 
 # -------------------------- Timetable generation ----------------------------
 
 @app.post("/generate")
 def generate(db: Session = Depends(get_db)):
-    """
-    Pulls all subjects + rooms from the DB, runs the backtracking scheduler,
-    saves the result, and returns it.
-    """
     subjects_db = db.query(models.Subject).all()
     rooms_db = db.query(models.Room).all()
 
@@ -159,9 +178,8 @@ def generate(db: Session = Depends(get_db)):
 
     success, result = generate_timetable(subjects, rooms)
     if not success:
-        raise HTTPException(409, result)  # result is the error message string
+        raise HTTPException(409, result)
 
-    # Wipe old timetable and save the new one
     db.query(models.TimetableEntry).delete()
     for row in result:
         db.add(
